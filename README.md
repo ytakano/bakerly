@@ -1,1 +1,1 @@
-# bakerly
+# bakery
