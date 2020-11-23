@@ -5,6 +5,18 @@ use std::thread;
 const NUM_THREADS: usize = 4;
 const NUM_LOOP: usize = 100000;
 
+macro_rules! read_mem {
+    ($addr: expr) => {
+        unsafe { read_volatile($addr) }
+    };
+}
+
+macro_rules! write_mem {
+    ($addr: expr, $val: expr) => {
+        unsafe { write_volatile($addr, $val) }
+    };
+}
+
 struct BakeryLock {
     entering: [bool; NUM_THREADS],
     tickets: [Option<u64>; NUM_THREADS],
@@ -13,20 +25,20 @@ struct BakeryLock {
 impl BakeryLock {
     fn lock(&mut self, idx: usize) -> LockGuard {
         fence(Ordering::SeqCst);
-        unsafe { write_volatile(&mut self.entering[idx], true) };
+        write_mem!(&mut self.entering[idx], true);
         fence(Ordering::SeqCst);
 
         let mut max = 0;
         for i in 0..NUM_THREADS {
-            if let Some(t) = unsafe { read_volatile(&self.tickets[i]) } {
+            if let Some(t) = read_mem!(&self.tickets[i]) {
                 max = max.max(t);
             }
         }
         let ticket = max + 1;
-        unsafe { write_volatile(&mut self.tickets[idx], Some(ticket)) }
+        write_mem!(&mut self.tickets[idx], Some(ticket));
 
         fence(Ordering::SeqCst);
-        unsafe { write_volatile(&mut self.entering[idx], false) };
+        write_mem!(&mut self.entering[idx], false);
         fence(Ordering::SeqCst);
 
         for i in 0..NUM_THREADS {
@@ -35,11 +47,11 @@ impl BakeryLock {
             }
 
             fence(Ordering::SeqCst);
-            while unsafe { read_volatile(&self.entering[i]) } {}
+            while read_mem!(&self.entering[i]) {}
             fence(Ordering::SeqCst);
 
             loop {
-                match unsafe { read_volatile(&self.tickets[i]) } {
+                match read_mem!(&self.tickets[i]) {
                     Some(t) => {
                         if ticket < t || (ticket == t && idx < i) {
                             break;
@@ -64,7 +76,7 @@ struct LockGuard {
 impl Drop for LockGuard {
     fn drop(&mut self) {
         fence(Ordering::SeqCst);
-        unsafe { write_volatile(&mut LOCK.tickets[self.idx], None) };
+        write_mem!(&mut LOCK.tickets[self.idx], None);
         fence(Ordering::SeqCst);
     }
 }
