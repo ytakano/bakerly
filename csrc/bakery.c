@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NUM_THREADS 2
-#define NUM_LOOP 10000
+#define NUM_THREADS 4
+#define NUM_LOOP 100000
 
 int entering[NUM_THREADS];
 int tickets[NUM_THREADS];
@@ -14,7 +14,6 @@ void write_volatile(volatile int *ptr, int val) { *ptr = val; }
 
 void lock_aqcuire(int idx) {
     __sync_synchronize();
-    // entering[idx] = 1;
     write_volatile(&entering[idx], 1);
     __sync_synchronize();
 
@@ -26,9 +25,9 @@ void lock_aqcuire(int idx) {
         }
     }
     int ticket = max + 1;
+    write_volatile(&tickets[idx], ticket);
 
     __sync_synchronize();
-    // entering[idx] = 0;
     write_volatile(&entering[idx], 0);
     __sync_synchronize();
 
@@ -58,7 +57,6 @@ void lock_aqcuire(int idx) {
 
 void lock_release(int idx) {
     __sync_synchronize();
-    // tickets[idx] = 0;
     write_volatile(&tickets[idx], 0);
     __sync_synchronize();
 }

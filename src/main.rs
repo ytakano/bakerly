@@ -2,8 +2,8 @@ use std::ptr::{read_volatile, write_volatile};
 use std::sync::atomic::{fence, Ordering};
 use std::thread;
 
-const NUM_THREADS: usize = 2;
-const NUM_LOOP: usize = 10000;
+const NUM_THREADS: usize = 4;
+const NUM_LOOP: usize = 100000;
 
 struct BakeryLock {
     entering: [bool; NUM_THREADS],
@@ -13,17 +13,20 @@ struct BakeryLock {
 impl BakeryLock {
     fn lock(&mut self, idx: usize) -> LockGuard {
         fence(Ordering::SeqCst);
-        self.entering[idx] = true;
+        unsafe { write_volatile(&mut self.entering[idx], true) };
         fence(Ordering::SeqCst);
 
-        let ticket = 1 + self.tickets.iter().fold(0, |m, v| match v {
-            Some(t) => m.max(*t),
-            None => 0,
-        });
-        self.tickets[idx] = Some(ticket);
+        let mut max = 0;
+        for i in 0..NUM_THREADS {
+            if let Some(t) = unsafe { read_volatile(&self.tickets[i]) } {
+                max = max.max(t);
+            }
+        }
+        let ticket = max + 1;
+        unsafe { write_volatile(&mut self.tickets[idx], Some(ticket)) }
 
         fence(Ordering::SeqCst);
-        self.entering[idx] = false;
+        unsafe { write_volatile(&mut self.entering[idx], false) };
         fence(Ordering::SeqCst);
 
         for i in 0..NUM_THREADS {
@@ -61,7 +64,7 @@ struct LockGuard {
 impl Drop for LockGuard {
     fn drop(&mut self) {
         fence(Ordering::SeqCst);
-        unsafe { LOCK.tickets[self.idx] = None };
+        unsafe { write_volatile(&mut LOCK.tickets[self.idx], None) };
         fence(Ordering::SeqCst);
     }
 }
