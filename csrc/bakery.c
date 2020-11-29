@@ -36,10 +36,8 @@ void lock_aqcuire(int idx) {
             continue;
         }
 
-        __sync_synchronize();
         while (read_volatile(&entering[i])) {
         }
-        __sync_synchronize();
 
         for (;;) {
             int t = read_volatile(&tickets[i]);
@@ -55,11 +53,7 @@ void lock_aqcuire(int idx) {
     __sync_synchronize();
 }
 
-void lock_release(int idx) {
-    __sync_synchronize();
-    write_volatile(&tickets[idx], 0);
-    __sync_synchronize();
-}
+void lock_release(int idx) { write_volatile(&tickets[idx], 0); }
 
 void *th(void *arg) {
     int idx = (int)arg;
