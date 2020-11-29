@@ -24,6 +24,7 @@ struct BakeryLock {
 
 impl BakeryLock {
     fn lock(&mut self, idx: usize) -> LockGuard {
+        fence(Ordering::SeqCst);
         write_mem!(&mut self.entering[idx], true);
         fence(Ordering::SeqCst);
 
@@ -38,6 +39,7 @@ impl BakeryLock {
 
         fence(Ordering::SeqCst);
         write_mem!(&mut self.entering[idx], false);
+        fence(Ordering::SeqCst);
 
         for i in 0..NUM_THREADS {
             if i == idx {
@@ -60,6 +62,7 @@ impl BakeryLock {
             }
         }
 
+        fence(Ordering::SeqCst);
         LockGuard { idx }
     }
 }
