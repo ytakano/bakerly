@@ -3,7 +3,7 @@ use std::sync::atomic::{fence, Ordering};
 use std::thread;
 
 const NUM_THREADS: usize = 4;
-const NUM_LOOP: usize = 100000;
+const NUM_LOOP: usize = 1000000;
 
 macro_rules! read_mem {
     ($addr: expr) => {
@@ -24,7 +24,6 @@ struct BakeryLock {
 
 impl BakeryLock {
     fn lock(&mut self, idx: usize) -> LockGuard {
-        fence(Ordering::SeqCst);
         write_mem!(&mut self.entering[idx], true);
         fence(Ordering::SeqCst);
 
@@ -39,16 +38,13 @@ impl BakeryLock {
 
         fence(Ordering::SeqCst);
         write_mem!(&mut self.entering[idx], false);
-        fence(Ordering::SeqCst);
 
         for i in 0..NUM_THREADS {
             if i == idx {
                 continue;
             }
 
-            fence(Ordering::SeqCst);
             while read_mem!(&self.entering[i]) {}
-            fence(Ordering::SeqCst);
 
             loop {
                 match read_mem!(&self.tickets[i]) {
@@ -64,7 +60,6 @@ impl BakeryLock {
             }
         }
 
-        fence(Ordering::SeqCst);
         LockGuard { idx }
     }
 }
@@ -75,9 +70,7 @@ struct LockGuard {
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        fence(Ordering::SeqCst);
         write_mem!(&mut LOCK.tickets[self.idx], None);
-        fence(Ordering::SeqCst);
     }
 }
 
